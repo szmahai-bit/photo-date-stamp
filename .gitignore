@@ -1,0 +1,55 @@
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Build artifacts
+build/
+dist/
+*.spec.bak
+*.egg-info/
+.eggs/
+
+# PyInstaller
+*.manifest
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS files
+Thumbs.db
+desktop.ini
+
+# User photos & generated output (never commit personal images)
+*.jpg
+*.jpeg
+*.png
+*.tif
+*.tiff
+*.webp
+*.bmp
+dated/
+
+# NOTE: app icon is generated at build time (make_icon.py), not committed
+# docs screenshots are intentionally tracked
+!docs/screenshots/*.png
+!docs/screenshots/*.jpg
+
+# Local notes
+*.log
