@@ -15,7 +15,7 @@ import sys
 import threading
 import traceback
 import ctypes
-import winreg
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -24,6 +24,14 @@ from tkinter import ttk, filedialog, messagebox
 import tkinter.font as tkfont
 
 from PIL import Image, ImageTk
+
+# winreg 仅 Windows 存在；macOS/Linux 上条件导入，避免启动时 ImportError。
+if sys.platform == "win32":
+    import winreg
+else:
+    winreg = None
+
+IS_MAC = sys.platform == "darwin"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import stamp_core as core
@@ -45,22 +53,25 @@ FORMATS = [
 
 
 def detect_system_font():
-    """读取 Windows 系统 UI 字体(名称与字号 pt)，失败则回退到 tkinter 默认。
+    """读取系统 UI 字体(名称与字号 pt)，失败则回退到 tkinter 默认。
 
-    系统字号改变(设置->个性化->字体大小)后重启本工具，界面字体会随之变化。
+    Windows 读注册表 MessageFont；macOS/Linux 直接用 Tk 默认字体
+    (macOS 上是系统 UI 字体 SF Pro / Helvetica，会随系统字号联动)。
+    系统字号改变后重启本工具，界面字体会随之变化。
     """
     face, pt = None, None
-    try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                             r"Control Panel\Desktop\WindowMetrics")
-        raw = bytes(winreg.QueryValueEx(key, "MessageFont")[0])
-        winreg.CloseKey(key)
-        height_px = ctypes.c_int.from_buffer_copy(raw[:4]).value   # LOGFONT.lfHeight
-        pt = max(8, round(abs(height_px) * 72 / 96))                # 96dpi: px -> pt
-        name_buf = (ctypes.c_wchar * 32).from_buffer_copy(raw[28:28 + 64])
-        face = name_buf.value or None
-    except Exception:
-        pass
+    if sys.platform == "win32" and winreg is not None:
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                 r"Control Panel\Desktop\WindowMetrics")
+            raw = bytes(winreg.QueryValueEx(key, "MessageFont")[0])
+            winreg.CloseKey(key)
+            height_px = ctypes.c_int.from_buffer_copy(raw[:4]).value   # LOGFONT.lfHeight
+            pt = max(8, round(abs(height_px) * 72 / 96))                # 96dpi: px -> pt
+            name_buf = (ctypes.c_wchar * 32).from_buffer_copy(raw[28:28 + 64])
+            face = name_buf.value or None
+        except Exception:
+            pass
     if not face or not pt:
         d = tkfont.nametofont("TkDefaultFont")
         face = face or d.cget("family")
@@ -84,12 +95,13 @@ def setup_theme(root: tk.Tk):
         # 字体导致大小不一、发虚，日志里全是中文+文件名，用系统字体最清晰。
         "log": max(12, round((base + 2) * ui_scale)),
     }
+    mono_face = "Menlo" if IS_MAC else "Consolas"
     fonts = {
         "body": (face, sizes["body"]),
         "small": (face, sizes["small"]),
         "title": (face, sizes["title"], "bold"),
         "header": (face, sizes["header"], "bold"),
-        "mono": ("Consolas", sizes["mono"]),
+        "mono": (mono_face, sizes["mono"]),
         "log": (face, sizes["log"]),
     }
 
@@ -636,10 +648,18 @@ class App:
         out = self.v_out.get().strip()
         if not out and self.files:
             out = str(self.files[0].parent / "dated")
-        if out and Path(out).exists():
-            os.startfile(out)
-        else:
+        if not out or not Path(out).exists():
             messagebox.showinfo("提示", "输出目录还不存在，先处理一次照片吧。")
+            return
+        try:
+            if sys.platform == "win32":
+                os.startfile(out)
+            elif sys.platform == "darwin":
+                subprocess.run(["open", out], check=False)
+            else:
+                subprocess.run(["xdg-open", out], check=False)
+        except Exception as e:
+            messagebox.showerror("打开失败", str(e))
 
     # ---------------- 处理 ----------------
     def start_process(self):

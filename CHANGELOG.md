@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- macOS support: cross-platform GUI (no Windows-only imports on Mac), a PyInstaller
+  `.app` build (`build_mac.spec` / `build_mac.sh`), a `.icns` icon generated via
+  `iconutil`, and a `macos-latest` CI job that publishes the `.dmg` to Releases.
+  Windows drag & drop remains; on macOS use the add buttons.
+
 ### Fixed
 
 - Portrait photos no longer get rotated to landscape after export. `ImageOps.exif_transpose`

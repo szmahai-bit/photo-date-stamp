@@ -46,10 +46,13 @@ desktop.ini
 *.bmp
 dated/
 
-# NOTE: app icon is generated at build time (make_icon.py), not committed
+# NOTE: app icons are generated at build time (make_icon.py + iconutil), not committed
 # docs screenshots are intentionally tracked
 !docs/screenshots/*.png
 !docs/screenshots/*.jpg
+*.icns
+*.ico
+assets/icon.iconset/
 
 # Local notes
 *.log

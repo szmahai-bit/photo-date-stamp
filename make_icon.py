@@ -1,25 +1,37 @@
 #!/usr/bin/env python3
-"""Generate assets/icon.ico (calendar / date themed) with pure Pillow.
+"""Generate app icons (calendar / date themed) with pure Pillow.
 
-No external assets required. Run automatically by build.bat and the CI
-workflow before PyInstaller packages the app. Keeping the icon generated from
-source avoids committing a binary blob and keeps the repository reproducible.
+No external assets required. Generates:
+  - assets/icon.ico        Windows EXE icon
+  - assets/icon.iconset/   macOS PNG set, converted to .icns by iconutil in build_mac.sh
+
+Keeping icons generated from source avoids committing binary blobs and keeps
+the repository reproducible.
 """
 from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-SIZES = [16, 24, 32, 48, 64, 128, 256]
+ICO_SIZES = [16, 24, 32, 48, 64, 128, 256]
+# macOS iconset: each logical size has a 1x and a 2x (retina) PNG.
+ICONSET_SPECS = [
+    ("icon_16x16.png", 16), ("icon_16x16@2x.png", 32),
+    ("icon_32x32.png", 32), ("icon_32x32@2x.png", 64),
+    ("icon_128x128.png", 128), ("icon_128x128@2x.png", 256),
+    ("icon_256x256.png", 256), ("icon_256x256@2x.png", 512),
+    ("icon_512x512.png", 512), ("icon_512x512@2x.png", 1024),
+]
 ORANGE = (0xFF, 0x5C, 0x1C)
 DARK = (0x2A, 0x20, 0x18)
 WHITE = (0xFF, 0xF3, 0xE8)
 
 HERE = Path(__file__).resolve().parent
-OUT = HERE / "assets" / "icon.ico"
+ICO_OUT = HERE / "assets" / "icon.ico"
+ICONSET_OUT = HERE / "assets" / "icon.iconset"
 
 
 def draw_base(S: int) -> Image.Image:
-    """Draw one high-res master tile at size S, then downscale per ICO size."""
+    """Draw one high-res master tile at size S, then downscale per icon size."""
     scale = 4
     N = S * scale
     img = Image.new("RGBA", (N, N), (0, 0, 0, 0))
@@ -51,10 +63,16 @@ def draw_base(S: int) -> Image.Image:
 
 
 def main() -> None:
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    master = draw_base(max(SIZES))
-    master.save(OUT, format="ICO", sizes=[(s, s) for s in SIZES])
-    print(f"icon written: {OUT} ({OUT.stat().st_size} bytes)")
+    ICO_OUT.parent.mkdir(parents=True, exist_ok=True)
+    master = draw_base(max(max(ICO_SIZES), 1024))
+    # Windows ICO
+    master.save(ICO_OUT, format="ICO", sizes=[(s, s) for s in ICO_SIZES])
+    print(f"icon written: {ICO_OUT} ({ICO_OUT.stat().st_size} bytes)")
+    # macOS iconset PNGs (iconutil converts these to .icns at build time)
+    ICONSET_OUT.mkdir(parents=True, exist_ok=True)
+    for name, size in ICONSET_SPECS:
+        draw_base(size).save(ICONSET_OUT / name, format="PNG")
+    print(f"iconset written: {ICONSET_OUT} ({len(ICONSET_SPECS)} PNGs)")
 
 
 if __name__ == "__main__":
