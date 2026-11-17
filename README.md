@@ -41,7 +41,9 @@
 - `.dmg`：双击打开，把「照片加日期」拖进「应用程序」即可。
 - `.app`：可直接双击运行。若 macOS 提示「无法打开，因为来自身份不明的开发者」，右键 → 打开 → 再点「打开」；或在「系统设置 → 隐私与安全性」里点「仍要打开」。
 
-> macOS App 由 GitHub Actions 在 macOS 机器上自动构建，本仓库不直接提供在 Windows 上制作的 Mac 安装包。
+> **架构说明**：构建产物为 **Intel（x86_64）** 版本，在 Intel Mac 上原生运行，在 Apple Silicon（M1/M2/M3…）Mac 上通过 macOS 自带的 Rosetta 2 转译运行——**一份安装包通吃所有 Mac**。此前基于 `macos-latest` 的构建是 arm64 架构，无法在 Intel Mac 上运行，现已修正为 `macos-15-intel` 构建并加了架构校验。
+
+> macOS App 由 GitHub Actions 在 Intel macOS 机器上自动构建，本仓库不直接提供在 Windows 上制作的 Mac 安装包。
 
 ### 从源码运行（Windows / macOS 通用）
 

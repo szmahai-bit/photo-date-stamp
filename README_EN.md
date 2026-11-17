@@ -40,7 +40,9 @@ Download the latest `照片加日期.dmg` (or the `照片加日期.app` from Act
 - `.dmg`: open it and drag "照片加日期" into Applications.
 - `.app`: double-click to run. If macOS says it "can't be opened because it is from an unidentified developer", right-click → Open → Open again, or allow it in System Settings → Privacy & Security.
 
-> The macOS app is built automatically by GitHub Actions on a macOS runner; no Mac installer made on Windows is shipped in this repo.
+> **Architecture**: the build is an **Intel (x86_64)** app — native on Intel Macs, and runs on Apple Silicon (M1/M2/M3…) via macOS's built-in Rosetta 2. **One installer works on every Mac.** Earlier builds used `macos-latest` (arm64) and could not run on Intel Macs; the CI now builds on `macos-15-intel` with an architecture check.
+
+> The macOS app is built automatically by GitHub Actions on an Intel macOS runner; no Mac installer made on Windows is shipped in this repo.
 
 ### Run from source (Windows / macOS)
 
@@ -129,7 +131,7 @@ This generates icons (ico + iconset → `.icns` via `iconutil`) and builds `dist
 hdiutil create -volname "照片加日期" -srcfolder "dist/照片加日期.app" -ov -format UDZO "dist/照片加日期.dmg"
 ```
 
-> PyInstaller cannot cross-compile — the macOS app must be built on macOS. This repo's GitHub Actions builds it on `macos-latest` and attaches the `.dmg` to a Release when you push a tag (e.g. `v1.1.0`).
+> PyInstaller cannot cross-compile — the macOS app must be built on macOS. This repo's GitHub Actions builds it on `macos-15-intel` (x86_64, works on both Intel and Apple Silicon Macs) and attaches the `.dmg` to a Release when you push a tag (e.g. `v1.1.0`).
 
 ---
 

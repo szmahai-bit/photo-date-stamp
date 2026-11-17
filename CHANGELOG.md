@@ -11,10 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - macOS support: cross-platform GUI (no Windows-only imports on Mac), a PyInstaller
   `.app` build (`build_mac.spec` / `build_mac.sh`), a `.icns` icon generated via
-  `iconutil`, and a `macos-latest` CI job that publishes the `.dmg` to Releases.
+  `iconutil`, and a macOS CI job that publishes the `.dmg` to Releases.
   Windows drag & drop remains; on macOS use the add buttons.
 
 ### Fixed
+
+- macOS App is now built on the `macos-15-intel` (x86_64) runner instead of
+  `macos-latest` (arm64). The previous arm64 build could not launch on Intel Macs;
+  the Intel build runs natively on Intel Macs and via Rosetta 2 on Apple Silicon.
+  The CI also verifies `uname -m` and the bundled binary's architecture before
+  packaging to prevent an accidental arm64 build.
 
 - Portrait photos no longer get rotated to landscape after export. `ImageOps.exif_transpose`
   already baked the display orientation into the pixels, but the original EXIF Orientation
