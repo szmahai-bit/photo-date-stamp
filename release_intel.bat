@@ -3,12 +3,14 @@ chcp 65001 >nul
 cd /d "%~dp0"
 
 echo ================================================
-echo   Release v1.1.0 - Intel Mac build
+echo   Release v1.1.0 - Intel Mac build (retry)
 echo ================================================
 echo.
-echo Pushes the Intel-macOS fix, then tags v1.1.0.
-echo The tag triggers GitHub Actions to rebuild and
-echo attach the Intel .dmg + Windows .exe to Releases.
+echo Re-pushes the CI permission fix, then force-updates
+echo tag v1.1.0 to trigger a clean rebuild. This time
+echo GitHub Actions can attach the .dmg + .exe to Releases.
+echo (Previous run built fine; only the Release upload
+echo  failed due to missing token permission - now fixed.)
 echo.
 
 set /p GHUSER=GitHub username (Enter = szmahai-bit):
