@@ -91,13 +91,16 @@ jobs:
       - name: Upload .app artifact
         uses: actions/upload-artifact@v7
         with:
-          name: photo-date-stamp-macos-app
+          # Include the architecture in artifact names. Two historical runs
+          # produced identically-named artifacts (arm64 vs x86_64) and users
+          # downloaded the wrong one, getting "this Mac does not support it".
+          name: photo-date-stamp-macos-intel-app
           path: dist/照片加日期.app
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v7
         with:
-          name: photo-date-stamp-macos-dmg
+          name: photo-date-stamp-macos-intel-dmg
           path: dist/照片加日期.dmg
 
       - name: Attach DMG to GitHub Release (on tag)

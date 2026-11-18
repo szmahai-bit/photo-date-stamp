@@ -42,6 +42,8 @@
 - `.app`：可直接双击运行。若 macOS 提示「无法打开，因为来自身份不明的开发者」，右键 → 打开 → 再点「打开」；或在「系统设置 → 隐私与安全性」里点「仍要打开」。
 
 > **架构说明**：构建产物为 **Intel（x86_64）** 版本，在 Intel Mac 上原生运行，在 Apple Silicon（M1/M2/M3…）Mac 上通过 macOS 自带的 Rosetta 2 转译运行——**一份安装包通吃所有 Mac**。此前基于 `macos-latest` 的构建是 arm64 架构，无法在 Intel Mac 上运行，现已修正为 `macos-15-intel` 构建并加了架构校验。
+>
+> **⚠️ 下载时认准架构，别下错批次**：GitHub Actions 历史上有两批同名产物。请选择名字里带 **`intel`** 的（`photo-date-stamp-macos-intel-...`），或进入构建机器为 `macos-15-intel` 的那次 run 下载。旧批次（`macos-latest`，2026-11-17 13:45）是 arm64 版，在 Intel Mac 上打开会提示「这台 Mac 不支持此应用」、图标带禁止符号——遇到这个提示就是下错了，重新下载 Intel 版即可。不确定时可在「终端」里把 App 拖进去运行 `lipo -info <App路径>/Contents/MacOS/照片加日期`，显示 `x86_64` 才对。
 
 > macOS App 由 GitHub Actions 在 Intel macOS 机器上自动构建，本仓库不直接提供在 Windows 上制作的 Mac 安装包。
 
@@ -158,7 +160,7 @@ bash build_mac.sh
 hdiutil create -volname "照片加日期" -srcfolder "dist/照片加日期.app" -ov -format UDZO "dist/照片加日期.dmg"
 ```
 
-> PyInstaller 不能跨平台编译——macOS App 必须在 macOS 上构建。本仓库的 GitHub Actions 会在 `macos-latest` 上自动完成构建，并在打 tag（如 `v1.1.0`）时把 `.dmg` 附到 Release。
+> PyInstaller 不能跨平台编译——macOS App 必须在 macOS 上构建。本仓库的 GitHub Actions 会在 `macos-15-intel`（x86_64）上自动完成构建，并在打 tag（如 `v1.1.0`）时把 `.dmg` 附到 Release。
 
 ---
 

@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The CI also verifies `uname -m` and the bundled binary's architecture before
   packaging to prevent an accidental arm64 build.
 
+- macOS artifact names now include the architecture (`photo-date-stamp-macos-intel-app`
+  / `photo-date-stamp-macos-intel-dmg`). Two older CI runs produced identically named
+  artifacts with different architectures, so users could download the arm64 build on
+  an Intel Mac and see "this Mac does not support this app". Both READMEs now explain
+  how to tell the builds apart and verify with `lipo -info`.
+
 - Portrait photos no longer get rotated to landscape after export. `ImageOps.exif_transpose`
   already baked the display orientation into the pixels, but the original EXIF Orientation
   tag was still written back, causing image viewers to rotate the photo a second time.

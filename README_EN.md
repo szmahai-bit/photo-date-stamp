@@ -41,6 +41,8 @@ Download the latest `照片加日期.dmg` (or the `照片加日期.app` from Act
 - `.app`: double-click to run. If macOS says it "can't be opened because it is from an unidentified developer", right-click → Open → Open again, or allow it in System Settings → Privacy & Security.
 
 > **Architecture**: the build is an **Intel (x86_64)** app — native on Intel Macs, and runs on Apple Silicon (M1/M2/M3…) via macOS's built-in Rosetta 2. **One installer works on every Mac.** Earlier builds used `macos-latest` (arm64) and could not run on Intel Macs; the CI now builds on `macos-15-intel` with an architecture check.
+>
+> **⚠️ Pick the right architecture — don't grab the wrong batch**: GitHub Actions has two historical runs with identically-named artifacts. Choose the ones whose name contains **`intel`** (`photo-date-stamp-macos-intel-...`), or download from the run whose runner is `macos-15-intel`. The old batch (`macos-latest`, 2026-11-17 13:45) is arm64; opening it on an Intel Mac shows "this Mac does not support this app" with a prohibited icon — if you see that, you downloaded the wrong one, just re-download the Intel build. To be sure, drag the app into Terminal and run `lipo -info <AppPath>/Contents/MacOS/照片加日期`; only `x86_64` is correct.
 
 > The macOS app is built automatically by GitHub Actions on an Intel macOS runner; no Mac installer made on Windows is shipped in this repo.
 
