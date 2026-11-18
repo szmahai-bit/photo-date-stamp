@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Watch folder monitoring: enable it on a dedicated folder and drop in photos to
+  auto-stamp and export. Images with an EXIF date are processed immediately; images
+  without one pause the watcher and open a dialog to fill in dates (defaulting to
+  today) before resuming. Processed originals are moved into the folder's `_done/`
+  subfolder. The watcher uses a timer-based poll with a two-scan stability check,
+  so it stays dependency-free and PyInstaller-friendly.
+
 - macOS support: cross-platform GUI (no Windows-only imports on Mac), a PyInstaller
   `.app` build (`build_mac.spec` / `build_mac.sh`), a `.icns` icon generated via
   `iconutil`, and a macOS CI job that publishes the `.dmg` to Releases.

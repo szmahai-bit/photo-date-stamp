@@ -24,8 +24,22 @@ Fully standalone — no dependency on Alcedo Studio or any private skill.
 - 💾 **Non-destructive**: originals untouched; EXIF and ICC profile preserved, with EXIF orientation fixed so portrait exports stay portrait
 - 📦 **Cross-platform**: self-contained EXE for Windows, `.app` / `.dmg` for macOS — both double-click ready
 - 🔤 **System font aware**: UI font size follows the system UI font (registry on Windows, system font on macOS) and DPI scaling
+- 📂 **Watch folder**: point at a folder and drop in photos to auto-stamp and export. Photos **with** an EXIF date are processed immediately; photos **without** one pause the watcher and pop up a dialog to fill in dates (defaulting to today), then resume. Processed originals are moved into the folder's `_done/` subfolder
 
 ---
+
+### Watch folder (unattended batch processing)
+
+Ideal for bulk runs after importing from a camera: set up a dedicated folder, copy photos into it, and the tool scans periodically.
+
+1. In the **Watch folder** section at the bottom, check **Enable monitoring** and click "Browse…" to pick a **dedicated empty folder** (avoids processing unrelated photos).
+2. Set the scan interval (default 5 s). The tool only processes files whose fingerprint is identical across two consecutive scans, so a half-copied file is never read.
+3. Behavior:
+   - **Has an EXIF shooting date** → stamped automatically, exported to the "output directory" (or the folder's `dated/` if left blank), and the original moved into `_done/`.
+   - **Has no date** → monitoring pauses and a dialog lists those photos; fill in a date for each (defaults to today, format `YYYY-MM-DD`). "Confirm and process" stamps them and resumes; "Skip" leaves them unprocessed this round.
+4. The status label shows "monitoring / paused·awaiting date / processing"; uncheck the box to stop.
+
+> The watch folder shares the output directory setting with manual processing. To keep watch results separate, give it its own output directory.
 
 ## Quick start
 

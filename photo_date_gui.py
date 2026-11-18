@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 import threading
 import traceback
@@ -224,6 +225,13 @@ class App:
         self.processing = False
         self.cancel_flag = False
 
+        # ---- 热文件夹监控状态 ----
+        self.watch_timer: str | None = None
+        self._watch_seen: dict[str, tuple] = {}   # path -> (size, mtime_ns)，用于文件稳定性检测
+        self._watch_failed: set[str] = set()      # 处理失败的文件，本轮运行内不再重试
+        self._watch_waiting = False               # 弹窗询问日期中（暂停监控）
+        self._watch_busy = False                  # 后台处理中（暂停监控）
+
         self.fonts, self.sizes = setup_theme(root)
         self._vars()
         self._build()
@@ -250,6 +258,10 @@ class App:
         self.v_out = tk.StringVar(value="")
         self.v_quality = tk.StringVar(value="95")
         self.v_recursive = tk.BooleanVar(value=True)
+        # 热文件夹
+        self.v_watch_enabled = tk.BooleanVar(value=False)
+        self.v_watch_dir = tk.StringVar(value="")
+        self.v_watch_interval = tk.StringVar(value="5")   # 秒
 
     def _build(self):
         root = self.root
@@ -356,6 +368,22 @@ class App:
         self.prog_lbl = ttk.Label(row2, text="")
         self.prog_lbl.pack(side="left")
         ttk.Button(row2, text="打开输出目录", command=self.open_out).pack(side="right")
+
+        # ---- 热文件夹监控 ----
+        watchf = ttk.LabelFrame(bottom, text="热文件夹监控（放入图片自动加日期导出）", padding=(6, 6))
+        watchf.pack(fill="x", pady=(8, 0))
+        ttk.Checkbutton(watchf, text="启用监控", variable=self.v_watch_enabled,
+                        command=self.toggle_watch).grid(row=0, column=0, sticky="w")
+        ttk.Label(watchf, text="监控目录：").grid(row=0, column=1, sticky="w", padx=(10, 0))
+        ttk.Entry(watchf, textvariable=self.v_watch_dir, width=48).grid(row=0, column=2, sticky="w", padx=(0, 6))
+        ttk.Button(watchf, text="浏览…", command=self.choose_watch_dir).grid(row=0, column=3, sticky="w", padx=(0, 10))
+        ttk.Label(watchf, text="间隔(秒)：").grid(row=0, column=4, sticky="w")
+        ttk.Entry(watchf, textvariable=self.v_watch_interval, width=5).grid(row=0, column=5, sticky="w", padx=(0, 10))
+        self.watch_status = ttk.Label(watchf, text="● 未启用", foreground="#888")
+        self.watch_status.grid(row=0, column=6, sticky="w")
+        ttk.Label(watchf,
+                  text="检测到有 EXIF 日期的图片自动盖章导出，原图移入 _done；无日期的图片会暂停并弹窗询问日期。",
+                  style="Small.TLabel", foreground="#888").grid(row=1, column=0, columnspan=7, sticky="w", pady=(6, 0))
 
         log_frame = ttk.LabelFrame(bottom, text="日志", padding=(4, 4))
         log_frame.pack(fill="x", pady=(8, 0))
@@ -660,6 +688,243 @@ class App:
                 subprocess.run(["xdg-open", out], check=False)
         except Exception as e:
             messagebox.showerror("打开失败", str(e))
+
+    # ---------------- 热文件夹监控 ----------------
+    def choose_watch_dir(self):
+        d = filedialog.askdirectory(title="选择热文件夹（放入图片即自动加日期）")
+        if d:
+            self.v_watch_dir.set(d)
+
+    def toggle_watch(self):
+        """启用/关闭热文件夹监控。每轮只处理连续两次指纹一致的图片（确保文件写入完成）。"""
+        if not self.v_watch_enabled.get():
+            self._stop_watch()
+            self._set_watch_status("● 未启用", "#888")
+            self._log("热文件夹监控已关闭")
+            return
+        folder = self.v_watch_dir.get().strip()
+        if not folder or not Path(folder).is_dir():
+            messagebox.showwarning("提示", "请先选择有效的热文件夹目录。")
+            self.v_watch_enabled.set(False)
+            return
+        try:
+            interval = max(1, int(float(self.v_watch_interval.get())))
+            self.v_watch_interval.set(str(interval))
+        except (ValueError, TypeError):
+            interval = 5
+            self.v_watch_interval.set("5")
+        self._watch_seen = {}
+        self._watch_failed.clear()
+        self._watch_waiting = False
+        self._watch_busy = False
+        self._set_watch_status(f"● 监控中（每 {interval} 秒）", "#0a7d28")
+        self._log(f"热文件夹监控已启用：{folder}（会处理目录内所有图片，建议用专门的空文件夹）")
+        self._watch_tick()
+
+    def _stop_watch(self):
+        if self.watch_timer is not None:
+            try:
+                self.root.after_cancel(self.watch_timer)
+            except Exception:
+                pass
+            self.watch_timer = None
+
+    def _set_watch_status(self, text, color):
+        self.watch_status.configure(text=text, foreground=color)
+
+    def _scan_stable(self, folder: str) -> dict[str, tuple]:
+        """扫描热文件夹顶层图片，返回 path -> (size, mtime_ns) 指纹快照。"""
+        result = {}
+        try:
+            for p in Path(folder).iterdir():
+                if p.is_file() and p.suffix.lower() in core.IMAGE_SUFFIXES:
+                    try:
+                        st = p.stat()
+                        result[str(p)] = (st.st_size, st.st_mtime_ns)
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+        return result
+
+    def _watch_tick(self):
+        """主线程定时轮询：发现稳定的新图片 -> 分类 -> 无日期则弹窗询问 -> 处理。"""
+        if not self.v_watch_enabled.get():
+            return
+        try:
+            interval = max(1, int(float(self.v_watch_interval.get())))
+        except (ValueError, TypeError):
+            interval = 5
+        self.watch_timer = self.root.after(interval * 1000, self._watch_tick)
+
+        if self._watch_waiting or self._watch_busy or self.processing:
+            return
+        folder = self.v_watch_dir.get().strip()
+        if not folder or not Path(folder).is_dir():
+            self._set_watch_status("● 目录无效", "#c0392b")
+            return
+
+        current = self._scan_stable(folder)
+        # 找出"新且稳定"的图片：不在基线里 / 或指纹变了，且需要连续两次指纹一致
+        new_stable = []
+        for path, sig in current.items():
+            if path in self._watch_failed:
+                continue
+            prev = self._watch_seen.get(path)
+            if prev is None or prev != sig:
+                self._watch_seen[path] = sig   # 第一次看到或还在变化，记录后跳过
+            else:
+                new_stable.append(path)        # 连续两次一致，判定写入完成
+
+        # 清掉已不存在文件的记录
+        self._watch_seen = {k: v for k, v in self._watch_seen.items() if k in current}
+
+        if not new_stable:
+            return
+
+        # 分类：有 EXIF 日期 / 无日期
+        dated, no_date = [], []
+        for s in new_stable:
+            (dated if core.read_exif_datetime(s) else no_date).append(s)
+
+        for s in new_stable:
+            self._watch_seen.pop(s, None)   # 本轮已消费，避免重复入列
+
+        if no_date:
+            self._ask_watch_dates(no_date, dated)
+        elif dated:
+            self._start_watch_batch([(s, None) for s in dated])
+
+    def _ask_watch_dates(self, no_date: list[str], dated: list[str]):
+        """暂停监控，弹窗让用户为无日期图片填写日期（默认今天）。"""
+        self._watch_waiting = True
+        self._set_watch_status("● 暂停·等待设置日期", "#c87f0a")
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        win = tk.Toplevel(self.root)
+        win.title("热文件夹 · 部分照片没有拍摄日期")
+        win.transient(self.root)
+        win.resizable(False, True)
+        ttk.Label(win, text=f"检测到 {len(no_date)} 张照片没有 EXIF 拍摄日期，请填写日期（默认今天）：",
+                  padding=(12, 10)).pack(anchor="w")
+        cols = ttk.Frame(win, padding=(12, 0))
+        cols.pack(fill="both", expand=True)
+        entries: list[tuple[str, tk.StringVar]] = []
+        for i, path in enumerate(no_date):
+            ttk.Label(cols, text=Path(path).name, width=34, anchor="w").grid(row=i, column=0, sticky="w", pady=3)
+            var = tk.StringVar(value=today)
+            ttk.Entry(cols, textvariable=var, width=14).grid(row=i, column=1, sticky="w", padx=(8, 0), pady=3)
+            entries.append((path, var))
+        btn = ttk.Frame(win, padding=(12, 10))
+        btn.pack(fill="x")
+        chosen: dict[str, str] = {}
+
+        def confirm():
+            for path, var in entries:
+                v = var.get().strip()
+                try:
+                    datetime.strptime(v, "%Y-%m-%d")
+                except ValueError:
+                    messagebox.showerror("日期格式错误", f"「{Path(path).name}」的日期无效，应为 YYYY-MM-DD。", parent=win)
+                    return
+                chosen[path] = v
+            win.destroy()
+
+        def skip():
+            win.destroy()
+
+        ttk.Button(btn, text="确定并处理", command=confirm).pack(side="right")
+        ttk.Button(btn, text="跳过这些照片", command=skip).pack(side="right", padx=6)
+        win.protocol("WM_DELETE_WINDOW", skip)
+        self._center_window(win)
+        self.root.wait_window(win)
+
+        tasks = [(s, None) for s in dated] + [(p, chosen[p]) for p in no_date if p in chosen]
+        for p in no_date:
+            if p not in chosen:
+                self._watch_failed.add(p)   # 跳过的不再反复询问
+        self._watch_waiting = False
+        if tasks:
+            self._start_watch_batch(tasks)
+        else:
+            self._set_watch_status("● 监控中", "#0a7d28")
+
+    def _center_window(self, win):
+        win.update_idletasks()
+        w, h = win.winfo_width(), win.winfo_height()
+        pw, ph = self.root.winfo_width(), self.root.winfo_height()
+        x = self.root.winfo_x() + (pw - w) // 2
+        y = self.root.winfo_y() + (ph - h) // 2
+        win.geometry(f"+{max(0, x)}+{max(0, y)}")
+
+    def _start_watch_batch(self, tasks: list[tuple[str, str | None]]):
+        """把待处理任务交给后台线程；(src, 手动日期或None)。"""
+        try:
+            p = self._collect_params()
+        except Exception as e:
+            self._log(f"[热文件夹] 参数错误，跳过本批：{e}")
+            self._set_watch_status("● 监控中", "#0a7d28")
+            return
+        self._watch_busy = True
+        self._set_watch_status(f"● 处理中（{len(tasks)} 张）", "#1a5fb4")
+        threading.Thread(target=self._watch_worker, args=(p, tasks), daemon=True).start()
+
+    def _watch_worker(self, p: dict, tasks: list[tuple[str, str | None]]):
+        out_dir = self.v_out.get().strip()
+        ok = fail = 0
+        done_dir = None
+        try:
+            for src_s, manual in tasks:
+                src = Path(src_s)
+                if out_dir:
+                    dst = Path(out_dir) / src.name
+                else:
+                    dst = src.parent / "dated" / src.name
+                success, note = core.process_file(
+                    src, dst, captured=manual, date_format=p["date_format"],
+                    size=p["size"], size_ratio=p["size_ratio"], color=p["color"],
+                    glow=p["glow"], ghost=p["ghost"], orientation=p["orientation"],
+                    right_ratio=p["right_ratio"], edge_ratio=p["edge_ratio"],
+                    quality=p["quality"])
+                if success:
+                    ok += 1
+                    # 成功后把原图移到热文件夹下的 _done
+                    if done_dir is None:
+                        done_dir = src.parent / "_done"
+                    try:
+                        done_dir.mkdir(parents=True, exist_ok=True)
+                        target = self._unique_path(done_dir / src.name)
+                        shutil.move(str(src), str(target))
+                        self._log(f"[热文件夹] OK   {src.name} → {note}（原图→_done）")
+                    except Exception as me:
+                        self._log(f"[热文件夹] OK   {src.name} → {note}（原图移入_done失败：{me}）")
+                else:
+                    fail += 1
+                    self._watch_failed.add(src_s)
+                    self._log(f"[热文件夹] FAIL {src.name} → {note}")
+        except Exception:
+            self._log("热文件夹处理异常:\n" + traceback.format_exc())
+        finally:
+            self.root.after(0, self._watch_finish, ok, fail)
+
+    @staticmethod
+    def _unique_path(path: Path) -> Path:
+        """目标已存在时追加 _1/_2 后缀，避免覆盖。"""
+        if not path.exists():
+            return path
+        stem, suf = path.stem, path.suffix
+        i = 1
+        while True:
+            cand = path.with_name(f"{stem}_{i}{suf}")
+            if not cand.exists():
+                return cand
+            i += 1
+
+    def _watch_finish(self, ok, fail):
+        self._watch_busy = False
+        if self.v_watch_enabled.get():
+            self._set_watch_status("● 监控中", "#0a7d28")
+        self._log(f"[热文件夹] 本批处理结束：成功 {ok} 张，失败 {fail} 张。")
 
     # ---------------- 处理 ----------------
     def start_process(self):
