@@ -22,6 +22,10 @@ IMAGE_SUFFIXES = {".jpg", ".jpeg", ".jpe", ".tif", ".tiff", ".png", ".bmp", ".we
 
 PENTAX_ORANGE = (0xFF, 0x5C, 0x1C)
 
+# 年月日各组之间的最小可见间隙，单位为数字宽度 digit_w。
+# "26 01 08" 这类组合里，组间空白至少要有 GROUP_GAP_RATIO 个数字那么宽，避免挤在一起。
+GROUP_GAP_RATIO = 1.5
+
 # 位置比例，来自真实 Pentax 样片测量。ratio 描述"墨迹到边缘"的距离。
 LAYOUTS = {
     "landscape": {"rotate": 0, "right": 0.10, "edge": 0.089, "edge_side": "bottom"},
@@ -94,7 +98,10 @@ def _glyph_polygons(w, h, t):
 
 def _advance(char, digit_w, gap, t):
     if char == " ":
-        return digit_w * 0.62
+        # 组间空白 = 前一个数字的右间距(gap) + 空格的推进量。
+        # 要求该空白 >= GROUP_GAP_RATIO * digit_w，故空格至少推进这么多；
+        # 也保留旧值做下限，避免其它比例组合下反而变小。
+        return max(digit_w * 0.62, GROUP_GAP_RATIO * digit_w - gap)
     if char in ".:'":
         return digit_w * 0.55 + gap
     if char == "-":

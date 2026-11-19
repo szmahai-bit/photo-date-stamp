@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Date stamp spacing between year/month/day groups (e.g. `26 01 08`) was too
+  cramped. The whitespace between groups is now guaranteed to be at least 1.5
+  digit widths while digits inside a group stay tight, giving the film-date look
+  more breathing room. Applied to the GUI tool and the Alcedo date_stamp skill.
+
+
 - macOS App is now built on the `macos-15-intel` (x86_64) runner instead of
   `macos-latest` (arm64). The previous arm64 build could not launch on Intel Macs;
   the Intel build runs natively on Intel Macs and via Rosetta 2 on Apple Silicon.
